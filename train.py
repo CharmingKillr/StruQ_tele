@@ -1,6 +1,13 @@
+import os
+os.environ["WANDB_DISABLED"] = "true"
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Sequence
 import torch
+
+import torch_npu
+from torch_npu.contrib import transfer_to_npu
+import torch.distributed as dis
+
 import transformers
 from struq import SupervisedDataset
 from config import IGNORE_INDEX, DEFAULT_TOKENS, SPECIAL_DELM_TOKENS, TEXTUAL_DELM_TOKENS
@@ -98,13 +105,26 @@ def train():
     parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments, AttackArguments))
     model_args, data_args, training_args, attack_args = parser.parse_args_into_dataclasses()
     data_args.attack = attack_args.attack
+    training_args.report_to = []
+    training_args.gradient_checkpointing = True
+
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    device = torch.device(f"npu:{local_rank}")
+    torch_npu.npu.set_device(device)
+    print(f"[Rank {os.environ.get('RANK', '0')}] Using device: {device}")
+
     print('\n\n' + training_args.output_dir + '\n\n')
 
     print(model_args.model_name_or_path)
+
     model = transformers.AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
+        torch_dtype=torch.bfloat16 if training_args.bf16 else None,
     )
+
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable()
 
     if model_args.window_size > 0:
         model.config.window = model_args.window_size

@@ -1,0 +1,52 @@
+# ---- Python ----
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ---- data directories ----
+data/
+
+# ---- model directories ----
+huggyllama/
+mistralai/
+meta-llama/
+
+# ---- checkpoints / weights ----
+**/checkpoints/
+**/checkpoint/
+**/weights/
+**/weight/
+**/ckpt/
+**/models/
+**/model_ckpt/
+**/outputs/
+**/output/
+**/runs/
+
+# ---- common weight file extensions ----
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+*.npz
+*.npy
+
+# ---- logs ----
+*.log
+run.txt
+wandb/
+
+# ---- misc ----
+kernel_meta/
+core.*
+.vscode/
+.idea/
+fusion_result.json
+
+# ---- OS ----
+.DS_Store
+Thumbs.db

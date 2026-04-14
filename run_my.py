@@ -1,21 +1,22 @@
+import os
+os.environ['ASCEND_RT_VISIBLE_DEVICES'] = '0,1,2,3'
 import glob
 import argparse
-import os
 import time
 import numpy as np
 import datetime
 import re
-
+# /workspace
 MODEL_CONFIG = {
     'llama-7b': {
-        'path': 'huggyllama/llama-7b',
-        'data': 'data/alpaca_data_cleaned.json',
+        'path': '/workspace/huggingface_model/llama-7b', 
+        'data': '/workspace/StruQ/data/alpaca_data_cleaned.json',
         'lr':   '2e-5',
         'epoch': 3
     },
     'Mistral-7B-v0.1': {
-        'path': 'mistralai/Mistral-7B-v0.1',
-        'data': 'data/alpaca_data_cleaned.json',
+        'path': '/workspace/huggingface_model/Mistral-7B-v0.1',
+        'data': '/workspace/StruQ/data/alpaca_data_cleaned.json',
         'lr':   '2.5e-6',
         'epoch': 3
     }
@@ -50,7 +51,6 @@ def get_train_cmd(model, attack):
             --logging_steps 1 \
             --fsdp "full_shard auto_wrap" \
             --fsdp_transformer_layer_cls_to_wrap "LlamaDecoderLayer" \
-            --tf32 True\
             --attack {attack}'
     elif 'Mistral-7B-v0.1' in model.replace('-Instruct', ''):
         return f'python -m torch.distributed.run --nproc_per_node=4 --master_port={master_port} train.py \
@@ -74,7 +74,6 @@ def get_train_cmd(model, attack):
             --logging_steps 1 \
             --fsdp "full_shard auto_wrap" \
             --fsdp_transformer_layer_cls_to_wrap "MistralDecoderLayer" \
-            --tf32 True\
             --attack {attack}\
             --lr_scale True\
             --downsample True'
@@ -87,7 +86,7 @@ def train_and_test():
     parser.add_argument('-test', '--test_attack', type=str, default=['none', 'naive', 'ignore', 'escape_deletion', 'escape_separation', 'completion_other', 'completion_othercmb', 'completion_real', 'completion_realcmb', 'completion_close_2hash', 'completion_close_1hash', 'completion_close_0hash', 'completion_close_upper', 'completion_close_title', 'completion_close_nospace', 'completion_close_nocolon', 'completion_close_typo', 'completion_close_similar', 'hackaprompt'], nargs='+')
     parser.add_argument('-t', '--time', type=float, default=4)
     parser.add_argument('-e', '--env', type=str, default='struq')
-    parser.add_argument('--do_test', type=bool, default=True)
+    parser.add_argument('--do_test', type=bool, default=False)
     args = parser.parse_args()
     
     output_dirs = []
@@ -98,17 +97,27 @@ def train_and_test():
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(log_dir, exist_ok=True)
         
-        slurm_prefix = f"#!/bin/bash\n\n#SBATCH --nodes=1\n#SBATCH --time=0{args.time}:00:00\n#SBATCH --gres=gpu:4\n#SBATCH --cpus-per-task=16\n#SBATCH --output={log_dir}/train_%j.out\n\nsource activate {args.env}\n"
+        # slurm_prefix = f"#!/bin/bash\n\n#SBATCH --nodes=1\n#SBATCH --time=0{args.time}:00:00\n#SBATCH --gres=gpu:4\n#SBATCH --cpus-per-task=16\n#SBATCH --output={log_dir}/train_%j.out\n\nsource activate {args.env}\n"
 
-        temporary_slurm_file = f"train_{args.model.replace('/', '_')}_{attack}.slurm"
-        with open(temporary_slurm_file, 'w') as f: f.write(slurm_prefix + cmd)
-        os.system('sbatch ' + temporary_slurm_file)
-        os.remove(temporary_slurm_file)
-        print('\n' * 10 + slurm_prefix + cmd + '\n' * 10)
+        # temporary_slurm_file = f"train_{args.model.replace('/', '_')}_{attack}.slurm"
+        # with open(temporary_slurm_file, 'w') as f: f.write(slurm_prefix + cmd)
+        # os.system('sbatch ' + temporary_slurm_file)
+        # os.remove(temporary_slurm_file)
+        # print('\n' * 10 + slurm_prefix + cmd + '\n' * 10)
+        print("\n" + "=" * 80)
+        print(f"[INFO] Running attack: {attack}")
+        print(f"[INFO] CMD:\n{cmd}")
+        print("=" * 80 + "\n")
+        ret = os.system(cmd)
+        if ret != 0:
+            print(f"[WARN] command for attack {attack} exited with code {ret}")
+
         output_dirs.append(output_dir)
         time.sleep(2)
+    print("All train done.")
     
-    if not args.do_test: return
+    if not args.do_test: 
+        return
     print("Submitted all", len(output_dirs), "jobs, waiting for completion...")
     completed = []
 
@@ -124,11 +133,21 @@ def train_and_test():
             for attack in args.test_attack:
                 slurm_prefix = f"#!/bin/bash\n\n#SBATCH --nodes=1\n#SBATCH --time=0{args.time}:00:00\n#SBATCH --gres=gpu:1\n#SBATCH --cpus-per-task=16\n#SBATCH --output={log_dir}/{attack}_%j.out\n\nsource activate {args.env}\n"
                 cmd = f'python test.py --model_name_or_path {output_dir} --attack {attack}' # you may add --defense to test zero-shot prompting defense baselines
-                temporary_slurm_file = 'test_' + args.model.replace('/', '_') + output_dir.replace('/', '_') + '.slurm'
-                with open(temporary_slurm_file, 'w') as f: f.write(slurm_prefix + cmd)
-                os.system('sbatch ' + temporary_slurm_file)
-                os.remove(temporary_slurm_file)
-                print('\n' * 10 + slurm_prefix + cmd + '\n' * 10)
+
+                # temporary_slurm_file = 'test_' + args.model.replace('/', '_') + output_dir.replace('/', '_') + '.slurm'
+                # with open(temporary_slurm_file, 'w') as f: f.write(slurm_prefix + cmd)
+                # os.system('sbatch ' + temporary_slurm_file)
+                # os.remove(temporary_slurm_file)
+                # print('\n' * 10 + slurm_prefix + cmd + '\n' * 10)
+
+                print("\n" + "=" * 80)
+                print(f"[INFO] Testing attack: {attack} on {output_dir}")
+                print(f"[INFO] CMD:\n{cmd}")
+                print("=" * 80 + "\n")
+                ret = os.system(cmd)
+                if ret != 0:
+                    print(f"[WARN] command for testing attack {attack} on {output_dir} exited with code {ret}")
+
                 time.sleep(2)
             completed.append(output_dir)
         time.sleep(10)

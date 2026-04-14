@@ -1,15 +1,20 @@
+import os
+os.environ['ASCEND_RT_VISIBLE_DEVICES'] = '4'
 from copy import deepcopy
 import numpy as np
 import csv
-import os
 import re
 import sys
 import base64
 import argparse
 import time
 import torch
+
+import torch_npu
+from torch_npu.contrib import transfer_to_npu
+
 import transformers
-from peft import PeftModel
+#from peft import PeftModel
 import subprocess
 from config import IGNORE_ATTACK_SENTENCES, PROMPT_FORMAT, DEFAULT_TOKENS, DELIMITERS, TEST_INJECTED_WORD, TEST_INJECTED_PROMPT, TEST_INJECTED_PROMPT_SPANISH, TEXTUAL_DELM_TOKENS, FILTERED_TOKENS, TEST_INJECTED_PROMPT_CHINESE, SPECIAL_DELM_TOKENS
 from struq import format_with_other_delimiters, _tokenize_fn, jload, jdump
@@ -277,12 +282,12 @@ def hackaprompt(prompt_format):
 
 def test_parser():
     parser = argparse.ArgumentParser(prog='Testing a model with a specific attack')
-    parser.add_argument('-m', '--model_name_or_path', type=str)
+    parser.add_argument('-m', '--model_name_or_path', type=str, default='/workspace/StruQ/huggyllama/llama-7b_SpclSpclSpcl_NaiveCompletion_2025-03-12-01-02-37')
     parser.add_argument('-a', '--attack', type=str, default=['completion_real', 'completion_realcmb'], nargs='+')
     parser.add_argument('-d', '--defense', type=str, default='none', choices=['none', 'sandwich', 'instructional', 'reminder', 'isolation', 'incontext'], help='Baseline test-time zero-shot prompting defense')
     parser.add_argument('--device', type=str, default='0')
-    parser.add_argument('--data_path', type=str, default='data/davinci_003_outputs.json')
-    parser.add_argument('--openai_config_path', type=str, default='data/openai_configs.yaml')
+    parser.add_argument('--data_path', type=str, default='/workspace/StruQ/data/davinci_003_outputs.json')
+    parser.add_argument('--openai_config_path', type=str, default='/workspace/StruQ/data/openai_configs.yaml')
     parser.add_argument("--sample_ids", type=int, nargs="+", default=None, help='Sample ids to test in GCG, None for testing all samples')
     return parser.parse_args()
 
